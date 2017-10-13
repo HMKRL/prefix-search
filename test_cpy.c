@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <getopt.h>
 
 #include "tst.h"
+#include "bench.h"
 
 /** constants insert, delete, max word(s) & stack nodes */
 enum { INS, DEL, WRDMAX = 256, STKMAX = 512, LMAX = 1024 };
@@ -62,6 +64,22 @@ int main(int argc, char **argv)
 
     fclose(fp);
     printf("ternary_tree, loaded %d words in %.6f sec\n", idx, t2 - t1);
+
+    /* process --bench flag */
+    int bench_flag = 0;
+
+    struct option long_opt[] = {
+        {"bench", no_argument, &bench_flag, 1},
+        {0, 0, 0, 0}
+    };
+
+    getopt_long(argc, argv, "", long_opt, NULL);
+
+    if(bench_flag) {
+        prefix_search_bench(root);
+
+        return 0;
+    }
 
     for (;;) {
         printf(
