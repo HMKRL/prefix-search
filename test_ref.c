@@ -42,24 +42,41 @@ int main(int argc, char **argv)
     char *sgl[LMAX] = {NULL};
     tst_node *root = NULL, *res = NULL;
     int rtn = 0, idx = 0, sidx = 0;
-    FILE *fp = fopen(IN_FILE, "r");
+    FILE *fp;
     double t1, t2;
 
+    const int pool_size = 10000000;
+    int pool_used = 0;
+    char *pHead = (char*) malloc(pool_size * sizeof(char));
+    if(!pHead) {
+        fprintf(stderr, "error: pool allocation failed.\n");
+        return 1;
+    }
+    char *pCurr = pHead;
+
+    fp = fopen(IN_FILE, "r");
     if (!fp) { /* prompt, open, validate file for reading */
         fprintf(stderr, "error: file open failed '%s'.\n", argv[1]);
         return 1;
     }
 
     t1 = tvgetf();
-    while ((rtn = fscanf(fp, "%s", word)) != EOF) {
-        char *p = word;
-        /* FIXME: insert reference to each string */
+    while ((rtn = fscanf(fp, "%s", pCurr)) != EOF) {
+        char *p = pCurr;
         if (!tst_ins_del(&root, &p, INS, REF)) {
             fprintf(stderr, "error: memory exhausted, tst_insert.\n");
             fclose(fp);
             return 1;
         }
         idx++;
+        int add_len = strlen(pCurr) + 1;
+        pCurr += add_len;
+        pool_used += add_len;
+        if(pool_size - pool_used <= WRDMAX) { /* pool memory not enough */
+            fprintf(stderr, "error: pool size not enough.\n");
+            fclose(fp);
+            return 1;
+        }
     }
     t2 = tvgetf();
 
@@ -95,18 +112,25 @@ int main(int argc, char **argv)
             char *p = NULL;
         case 'a':
             printf("enter word to add: ");
-            if (!fgets(word, sizeof word, stdin)) {
+            if (!fgets(pCurr, WRDMAX, stdin)) {
                 fprintf(stderr, "error: insufficient input.\n");
                 break;
             }
-            rmcrlf(word);
-            p = word;
+            rmcrlf(pCurr);
+            p = pCurr;
             t1 = tvgetf();
-            /* FIXME: insert reference to each string */
             res = tst_ins_del(&root, &p, INS, REF);
             t2 = tvgetf();
             if (res) {
                 idx++;
+                int add_len = strlen(pCurr) + 1;
+                pCurr += add_len;
+                pool_used += add_len;
+                if(pool_size - pool_used <= WRDMAX) { /* pool memory not enough */
+                    fprintf(stderr, "error: pool size not enough.\n");
+                    return 1;
+                }
+
                 printf("  %s - inserted in %.6f sec. (%d words in tree)\n",
                        (char *) res, t2 - t1, idx);
             } else
@@ -166,6 +190,7 @@ int main(int argc, char **argv)
             break;
         case 'q':
             tst_free(root);
+            free(pHead);
             return 0;
             break;
         default:
