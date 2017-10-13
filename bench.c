@@ -15,20 +15,6 @@
 
 enum { WRDMAX = 256, STKMAX = 512, LMAX = 1024 };
 
-/* timing helper function */
-static double tvgetf(void)
-{
-    struct timespec ts;
-    double sec;
-
-    clock_gettime(CLOCK_REALTIME, &ts);
-    sec = ts.tv_nsec;
-    sec /= 1e9;
-    sec += ts.tv_sec;
-
-    return sec;
-}
-
 static inline __attribute__((always_inline))
 void get_cycles(unsigned *high, unsigned *low)
 {
@@ -67,7 +53,6 @@ void prefix_search_bench(const tst_node *root)
     char prefix[PREFIX_LEN + 1];
     int sidx = 0;
     FILE *infp = fopen(INFILE, "r"), *outfp = fopen(OUTFILE, "w");
-    double t1, t2;
 
     uint64_t timec;
     unsigned timec_high1, timec_low1, timec_high2, timec_low2;
