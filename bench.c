@@ -8,7 +8,6 @@
 #include "bench.h"
 
 #define INFILE "cities.txt"
-#define OUTFILE "result.txt"
 
 #define PREFIX_LEN 3
 #define SEARCH_TIMES 10000
@@ -46,22 +45,22 @@ uint64_t diff_in_cycles(unsigned high1, unsigned low1,
 }
 
 
-void prefix_search_bench(const tst_node *root)
+void prefix_search_bench(const tst_node *root, char *result_filename)
 {
     char word[WRDMAX] = "";
     char *sgl[LMAX] = {NULL};
     char prefix[PREFIX_LEN + 1];
     int sidx = 0;
-    FILE *infp = fopen(INFILE, "r"), *outfp = fopen(OUTFILE, "w");
+    FILE *infp = fopen(INFILE, "r"), *outfp = fopen(result_filename, "w");
 
     uint64_t timec;
     unsigned timec_high1, timec_low1, timec_high2, timec_low2;
 
 
-    if(!(infp && outfp)) {
+    if (!(infp && outfp)) {
         fprintf(stderr, "%s\n", "Open file failed.");
-        if(!infp) fclose(infp);
-        if(!outfp) fclose(outfp);
+        if (!infp) fclose(infp);
+        if (!outfp) fclose(outfp);
 
         return;
     }

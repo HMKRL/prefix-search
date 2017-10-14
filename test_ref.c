@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <getopt.h>
+#include <stdint.h>
 
 #include "tst.h"
 #include "bench.h"
@@ -11,6 +12,36 @@
 enum { INS, DEL, WRDMAX = 256, STKMAX = 512, LMAX = 1024 };
 #define REF INS
 #define CPY DEL
+
+static inline __attribute__((always_inline))
+void get_cycles(unsigned *high, unsigned *low)
+{
+    asm volatile ("CPUID\n\t"
+                  "RDTSC\n\t"
+                  "mov %%edx, %0\n\t"
+                  "movl %%eax, %1\n\t": "=r" (*high), "=r" (*low)::"%rax","%rbx","%rcx","%rdx"
+                 );
+}
+
+static inline __attribute__((always_inline))
+void get_cycles_end(unsigned *high, unsigned *low)
+{
+    asm volatile("RDTSCP\n\t"
+                 "mov %%edx, %0\n\t"
+                 "mov %%eax, %1\n\t"
+                 "CPUID\n\t": "=r" (*high), "=r" (*low)::"%rax","%rbx","%rcx","%rdx"
+                );
+}
+
+static inline __attribute__((always_inline))
+uint64_t diff_in_cycles(unsigned high1, unsigned low1,
+                        unsigned high2, unsigned low2)
+{
+    uint64_t start,end;
+    start = (((uint64_t) high1 << 32) | low1);
+    end = (((uint64_t) high2 << 32) | low2);
+    return end - start;
+}
 
 /* timing helper function */
 static double tvgetf(void)
@@ -35,6 +66,7 @@ static void rmcrlf(char *s)
 }
 
 #define IN_FILE "cities.txt"
+#define OUT_FILE "insert_result_ref.txt"
 
 int main(int argc, char **argv)
 {
@@ -42,13 +74,16 @@ int main(int argc, char **argv)
     char *sgl[LMAX] = {NULL};
     tst_node *root = NULL, *res = NULL;
     int rtn = 0, idx = 0, sidx = 0;
-    FILE *fp;
+    FILE *fp, *outfp;
     double t1, t2;
+
+    uint64_t timec;
+    unsigned timec_high1, timec_low1, timec_high2, timec_low2;
 
     const int pool_size = 10000000;
     int pool_used = 0;
     char *pHead = (char*) malloc(pool_size * sizeof(char));
-    if(!pHead) {
+    if (!pHead) {
         fprintf(stderr, "error: pool allocation failed.\n");
         return 1;
     }
@@ -60,27 +95,43 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    outfp = fopen(OUT_FILE, "w");
+    if (!outfp) { /* prompt, open, validate file for reading */
+        fprintf(stderr, "error: result file open failed '%s'.\n", argv[1]);
+        fclose(fp);
+        return 1;
+    }
+
     t1 = tvgetf();
     while ((rtn = fscanf(fp, "%s", pCurr)) != EOF) {
+        get_cycles(&timec_high1, &timec_low1);
         char *p = pCurr;
         if (!tst_ins_del(&root, &p, INS, REF)) {
             fprintf(stderr, "error: memory exhausted, tst_insert.\n");
             fclose(fp);
+            fclose(outfp);
+
             return 1;
         }
         idx++;
         int add_len = strlen(pCurr) + 1;
         pCurr += add_len;
         pool_used += add_len;
-        if(pool_size - pool_used <= WRDMAX) { /* pool memory not enough */
+        if (pool_size - pool_used <= WRDMAX) { /* remaining pool size not enough for next word */
             fprintf(stderr, "error: pool size not enough.\n");
             fclose(fp);
+            fclose(outfp);
+
             return 1;
         }
+        get_cycles_end(&timec_high2, &timec_low2);
+        timec = diff_in_cycles(timec_high1, timec_low1, timec_high2, timec_low2);
+        fprintf(outfp, "%d %ld\n", idx, timec);
     }
     t2 = tvgetf();
 
     fclose(fp);
+    fclose(outfp);
     printf("ternary_tree, loaded %d words in %.6f sec\n", idx, t2 - t1);
 
     /* process --bench flag */
@@ -93,8 +144,12 @@ int main(int argc, char **argv)
 
     getopt_long(argc, argv, "", long_opt, NULL);
 
-    if(bench_flag) {
-        prefix_search_bench(root);
+    if (bench_flag) {
+        prefix_search_bench(root, "search_result_ref.txt");
+        tst_free(root);
+        free(pHead);
+
+        return 0;
     }
 
     for (;;) {
@@ -126,7 +181,7 @@ int main(int argc, char **argv)
                 int add_len = strlen(pCurr) + 1;
                 pCurr += add_len;
                 pool_used += add_len;
-                if(pool_size - pool_used <= WRDMAX) { /* pool memory not enough */
+                if (pool_size - pool_used <= WRDMAX) { /* pool memory not enough for next word */
                     fprintf(stderr, "error: pool size not enough.\n");
                     return 1;
                 }

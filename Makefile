@@ -4,7 +4,7 @@ TESTS = \
 
 CFLAGS = -Wall -Werror -g
 
-# Control the build verbosity                                                   
+# Control the build verbosity
 ifeq ("$(VERBOSE)","1")
     Q :=
     VECHO = @true
@@ -41,6 +41,18 @@ test_%: test_%.o $(OBJS_LIB)
 %.o: %.c
 	$(VECHO) "  CC\t$@\n"
 	$(Q)$(CC) -o $@ $(CFLAGS) -c -MMD -MF .$@.d $<
+
+bench:
+	perf stat --repeat 100 \
+		-e cache-misses,cache-references,instructions,cycles \
+		sudo chrt -f 99 taskset -c 0 ./test_cpy --bench
+	perf stat --repeat 100 \
+		-e cache-misses,cache-references,instructions,cycles \
+		sudo chrt -f 99 taskset -c 0 ./test_ref --bench
+
+plot:
+	gnuplot ./scripts/insert.gp
+	gnuplot ./scripts/search.gp
 
 clean:
 	$(RM) $(TESTS) $(OBJS)
